@@ -1,0 +1,38 @@
+name: snyk-code-diff-pr-check
+on:
+  pull_request
+
+jobs:
+  test-only-changes:
+    runs-on: ubuntu-latest
+    steps:       
+      - name: setup snyk
+        run: |
+          # download latest snyk cli and make it executable
+          curl https://static.snyk.io/cli/latest/snyk-linux -o snyk
+          chmod +x ./snyk
+          mv ./snyk /usr/local/bin/
+
+      - name: snyk test
+        run: |
+          # authenticate snyk
+          snyk auth ${{ secrets.SNYK_TOKEN }}
+          snyk code test --sarif-file-output=snyk.sarif
+
+      - name: results for changed files
+        run: |
+          # make our local executable
+          chmod +x "${GITHUB_WORKSPACE}/.github/scripts/codeprcheck.sh"
+          ${GITHUB_WORKSPACE}/.github/scripts/codeprcheck.sh snyk.sarif snykupdated.sarif
+
+      - name: generate snyk report
+        run: |
+          # make our local executable
+          curl -LO 'https://github.com/snyk/snyk-to-html/releases/latest/download/snyk-to-html-linux' -o snyk-to-html
+          chmod +x ./snyk-to-html
+          mv ./snyk-to-html /usr/local/bin/
+          snyk-to-html -i snykupdated.sarif -o snykreport.html
+      - artifacts:
+          download: true
+          paths:
+            - snykreport.html
