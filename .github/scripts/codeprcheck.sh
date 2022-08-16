@@ -1,22 +1,21 @@
 #!/bin/bash
-# Requirements:
-# - Sarif file from Snyk Code scan
-# - Workflow in directory the Snyk Code Scan & diff are run on 
-# - Update variable MERGE_BASE to merge-base (or otherwise update diff as needed eg. between PR & destination branch)
-# - Node-JQ installed 
-# Set Merge Base (main if there isn't one from GH)
+# snyk_sarif and updatedsnyk_sarif are the input and output respectively
+# the file names are specified when running the script from the workflow (snyk-code-diff-pr-check.yml) 
 snyk_sarif="${1}"
 updatedsnyk_sarif="${2}"
-MERGE_BASE=main
-if [[ -z "${GITHUB_BASE_REF}" ]]; then
+# default merge base is main, but in a GitHub PR, the merge-base is the target branch of the PR
+MERGE_BASE="main"
+if [[ ! -z "${GITHUB_BASE_REF}" ]]; then
     MERGE_BASE=${GITHUB_BASE_REF}
-# when tested with the juliet-test-suite-java repo, diff only saw tracked files so did not give added files, only modified
-# I think when I first tested it in a small local repo I had to add/track new files
-# could be me misunderstanding how to execute this or the only way to achieve is something like:
-# https://stackoverflow.com/questions/855767/can-i-use-git-diff-on-untracked-files
-# this outputs the diff to a jq friendly way and saves it to a variable
-FILES_IN_DIFF_LIST=$(git diff --merge-base $MERGE_BASE --diff-filter=AM --name-only | jq --raw-input .| jq --slurp .)
-# select results where the location uri does not match a filename from the diff
+fi
+# retrieves the branches for the repo in preperation for the diff
+git fetch --no-tags --depth=1 --prune origin +refs/heads/*:refs/remotes/origin/*
+# uses a diff between the head & the merge-base to get the modified files and makes that the value of a variable (FILES_IN_DIFF_LIST)
+FILES_IN_DIFF_LIST=$(git diff "origin/${MERGE_BASE}" "origin/${GITHUB_HEAD_REF}" --diff-filter=AM --name-only)
+# makes the diff output a jq-friendly value and updates that as the value of FILES_IN_DIFF_LIST
+FILES_IN_DIFF_LIST=$(echo "${FILES_IN_DIFF_LIST}" | jq --raw-input .| jq --slurp .)
+# make a json variable of FILES_IN_DIFF_LIST using the variable previously created with the same name
+# select results from the input (snyk_sarif) where the location uri does not match a filename from the diff
 # delete results that were selected
-# output into a file
+# output into a file (updatedsnyk_sarif)
 jq --argjson FILES_IN_DIFF_LIST "$FILES_IN_DIFF_LIST" 'del(.runs[0].results[] | select([.locations[].physicalLocation.artifactLocation.uri] | inside ($FILES_IN_DIFF_LIST) | not))' $snyk_sarif > $updatedsnyk_sarif

@@ -6,10 +6,13 @@ jobs:
   test-only-changes:
     runs-on: ubuntu-latest
     steps:       
+      - name: checkout
+        uses: actions/checkout@v2
+      
       - name: setup snyk
         run: |
           # download latest snyk cli and make it executable
-          curl https://static.snyk.io/cli/latest/snyk-linux -o snyk
+          curl https://static.snyk.io/cli/latest/snyk-linux -L -o snyk
           chmod +x ./snyk
           mv ./snyk /usr/local/bin/
 
@@ -17,22 +20,34 @@ jobs:
         run: |
           # authenticate snyk
           snyk auth ${{ secrets.SNYK_TOKEN }}
-          snyk code test --sarif-file-output=snyk.sarif
-
+          # run snyk code test, export output to a sarif file and set it to not fail if issues
+          snyk code test --org=cse_snyk-playground --sarif-file-output=snyk.sarif || true
+          
       - name: results for changed files
         run: |
+          curl https://github.com/stedolan/jq/releases/latest/download/jq-linux64 -L -o jq
+          chmod +x ./jq
+          mv ./jq /usr/local/bin/
           # make our local executable
           chmod +x "${GITHUB_WORKSPACE}/.github/scripts/codeprcheck.sh"
+          # run codeprcheck.sh which outputs an updated sarif with snyk code results on modified files  
+          # the input for codeprcheck.sh is the sarif file exported from snyk code test 
           ${GITHUB_WORKSPACE}/.github/scripts/codeprcheck.sh snyk.sarif snykupdated.sarif
+          # list all of the contents of the workspace using long listing format (intended to help confirm updated sarif creation)
+          ls -al
 
       - name: generate snyk report
         run: |
           # make our local executable
-          curl -LO 'https://github.com/snyk/snyk-to-html/releases/latest/download/snyk-to-html-linux' -o snyk-to-html
+          curl https://github.com/snyk/snyk-to-html/releases/latest/download/snyk-to-html-linux -L -o snyk-to-html
           chmod +x ./snyk-to-html
           mv ./snyk-to-html /usr/local/bin/
-          snyk-to-html -i snykupdated.sarif -o snykreport.html
-      - artifacts:
-          download: true
-          paths:
-            - snykreport.html
+          snyk-to-html -i snykupdated.sarif > snykreport.html
+          # list all of the contents of the workspace using long listing format (intended to help confirm updated sarif creation)
+          ls -al
+          
+      - name: upload snyk report
+        uses: actions/upload-artifact@v3
+        with:
+          name: snyk-report
+          path: snykreport.html
