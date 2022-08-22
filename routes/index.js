@@ -1,5 +1,3 @@
-//Edited to test code diff pr check
-
 var utils = require('../utils');
 var mongoose = require('mongoose');
 var Todo = mongoose.model('Todo');
@@ -36,6 +34,7 @@ exports.index = function (req, res, next) {
     });
 };
 
+// Copied the below function to typeform-db.js for Code PR Check example
 exports.loginHandler = function (req, res, next) {
   if (validator.isEmail(req.body.username)) {
     User.find({ username: req.body.username, password: req.body.password }, function (err, users) {
