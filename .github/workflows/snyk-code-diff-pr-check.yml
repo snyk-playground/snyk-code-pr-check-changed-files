@@ -21,7 +21,7 @@ jobs:
           # authenticate snyk
           snyk auth ${{ secrets.SNYK_TOKEN }}
           # run snyk code test, export output to a sarif file and set it to not fail if issues
-          snyk code test --org=cse_snyk-playground --sarif-file-output=snyk.sarif || true
+          snyk code test --org=ee13656b-664c-446f-afcb-b5aaff779ed2 --sarif-file-output=snyk.sarif || true
           
       - name: results for changed files
         run: |
